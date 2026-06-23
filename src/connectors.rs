@@ -1,7 +1,7 @@
 use embedded_hal::digital::OutputPin;
 use embedded_hal::spi::SpiDevice;
 
-use crate::{Command, DataError, MAX_DISPLAYS};
+use crate::{Command, DataError};
 
 /// Describes the interface used to connect to the MX7219
 pub trait Connector {
@@ -41,20 +41,20 @@ pub trait Connector {
 }
 
 /// Direct GPIO pins connector
-pub struct PinConnector<DATA, CS, SCK>
+pub struct PinConnector<DATA, CS, SCK, const MAX_DISPLAYS: usize>
 where
     DATA: OutputPin,
     CS: OutputPin,
     SCK: OutputPin,
 {
     devices: usize,
-    buffer: [u8; MAX_DISPLAYS * 2],
+    buffer: [[u8; MAX_DISPLAYS]; 2],
     data: DATA,
     cs: CS,
     sck: SCK,
 }
 
-impl<DATA, CS, SCK> PinConnector<DATA, CS, SCK>
+impl<DATA, CS, SCK, const MAX_DISPLAYS: usize> PinConnector<DATA, CS, SCK, MAX_DISPLAYS>
 where
     DATA: OutputPin,
     CS: OutputPin,
@@ -63,7 +63,7 @@ where
     pub(crate) fn new(displays: usize, data: DATA, cs: CS, sck: SCK) -> Self {
         PinConnector {
             devices: displays,
-            buffer: [0; MAX_DISPLAYS * 2],
+            buffer: [[0; MAX_DISPLAYS]; 2],
             data,
             cs,
             sck,
@@ -71,7 +71,8 @@ where
     }
 }
 
-impl<DATA, CS, SCK> Connector for PinConnector<DATA, CS, SCK>
+impl<DATA, CS, SCK, const MAX_DISPLAYS: usize> Connector
+    for PinConnector<DATA, CS, SCK, MAX_DISPLAYS>
 where
     DATA: OutputPin,
     CS: OutputPin,
@@ -84,14 +85,14 @@ where
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS * 2];
+        self.buffer = [[0; MAX_DISPLAYS]; 2];
 
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
+        self.buffer.as_flattened_mut()[offset] = header;
+        self.buffer.as_flattened_mut()[offset + 1] = data;
 
         self.cs.set_low().map_err(|_| DataError::Pin)?;
         for b in 0..max_bytes {
-            let value = self.buffer[b];
+            let value = self.buffer.as_flattened()[b];
 
             for i in 0..8 {
                 if value & (1 << (7 - i)) > 0 {
@@ -110,30 +111,30 @@ where
     }
 }
 
-pub struct SpiConnector<SPI>
+pub struct SpiConnector<SPI, const MAX_DISPLAYS: usize>
 where
     SPI: SpiDevice<u8>,
 {
     devices: usize,
-    buffer: [u8; MAX_DISPLAYS * 2],
+    buffer: [[u8; MAX_DISPLAYS]; 2],
     spi: SPI,
 }
 
 /// Hardware controlled CS connector with SPI transfer
-impl<SPI> SpiConnector<SPI>
+impl<SPI, const MAX_DISPLAYS: usize> SpiConnector<SPI, MAX_DISPLAYS>
 where
     SPI: SpiDevice<u8>,
 {
     pub(crate) fn new(displays: usize, spi: SPI) -> Self {
         SpiConnector {
             devices: displays,
-            buffer: [0; MAX_DISPLAYS * 2],
+            buffer: [[0; MAX_DISPLAYS]; 2],
             spi,
         }
     }
 }
 
-impl<SPI> Connector for SpiConnector<SPI>
+impl<SPI, const MAX_DISPLAYS: usize> Connector for SpiConnector<SPI, MAX_DISPLAYS>
 where
     SPI: SpiDevice<u8>,
 {
@@ -144,13 +145,13 @@ where
     fn write_raw(&mut self, addr: usize, header: u8, data: u8) -> Result<(), DataError> {
         let offset = addr * 2;
         let max_bytes = self.devices * 2;
-        self.buffer = [0; MAX_DISPLAYS * 2];
+        self.buffer = [[0; MAX_DISPLAYS]; 2];
 
-        self.buffer[offset] = header;
-        self.buffer[offset + 1] = data;
+        self.buffer.as_flattened_mut()[offset] = header;
+        self.buffer.as_flattened_mut()[offset + 1] = data;
 
         self.spi
-            .write(&self.buffer[0..max_bytes])
+            .write(&self.buffer.as_flattened()[0..max_bytes])
             .map_err(|_| DataError::Spi)?;
 
         Ok(())
@@ -158,16 +159,16 @@ where
 }
 
 /// Software controlled CS connector with SPI transfer
-pub struct SpiConnectorSW<SPI, CS>
+pub struct SpiConnectorSW<SPI, CS, const MAX_DISPLAYS: usize>
 where
     SPI: SpiDevice<u8>,
     CS: OutputPin,
 {
-    spi_c: SpiConnector<SPI>,
+    spi_c: SpiConnector<SPI, MAX_DISPLAYS>,
     cs: CS,
 }
 
-impl<SPI, CS> SpiConnectorSW<SPI, CS>
+impl<SPI, CS, const MAX_DISPLAYS: usize> SpiConnectorSW<SPI, CS, MAX_DISPLAYS>
 where
     SPI: SpiDevice<u8>,
     CS: OutputPin,
@@ -180,7 +181,7 @@ where
     }
 }
 
-impl<SPI, CS> Connector for SpiConnectorSW<SPI, CS>
+impl<SPI, CS, const MAX_DISPLAYS: usize> Connector for SpiConnectorSW<SPI, CS, MAX_DISPLAYS>
 where
     SPI: SpiDevice<u8>,
     CS: OutputPin,

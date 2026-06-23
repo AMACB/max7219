@@ -14,9 +14,6 @@ use embedded_hal::spi::SpiDevice;
 pub mod connectors;
 use connectors::*;
 
-/// Maximum number of displays connected in series supported by this lib.
-const MAX_DISPLAYS: usize = 8;
-
 /// Digits per display
 const MAX_DIGITS: usize = 8;
 
@@ -356,7 +353,7 @@ where
     }
 }
 
-impl<DATA, CS, SCK> MAX7219<PinConnector<DATA, CS, SCK>>
+impl<DATA, CS, SCK, const MAX_DISPLAYS: usize> MAX7219<PinConnector<DATA, CS, SCK, MAX_DISPLAYS>>
 where
     DATA: OutputPin,
     CS: OutputPin,
@@ -381,7 +378,7 @@ where
     }
 }
 
-impl<SPI> MAX7219<SpiConnector<SPI>>
+impl<SPI, const MAX_DISPLAYS: usize> MAX7219<SpiConnector<SPI, MAX_DISPLAYS>>
 where
     SPI: SpiDevice<u8>,
 {
@@ -406,7 +403,7 @@ where
     }
 }
 
-impl<SPI, CS> MAX7219<SpiConnectorSW<SPI, CS>>
+impl<SPI, CS, const MAX_DISPLAYS: usize> MAX7219<SpiConnectorSW<SPI, CS, MAX_DISPLAYS>>
 where
     SPI: SpiDevice<u8>,
     CS: OutputPin,
